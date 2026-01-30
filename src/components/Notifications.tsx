@@ -1,38 +1,81 @@
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { apiService, UserNotification } from '../services/api';
+import { authService } from '../services/auth';
 
 interface NotificationsProps {
   onBack: () => void;
 }
 
-const notifications = [
-  {
-    id: 1,
-    type: 'survey',
-    title: 'New Health Survey',
-    message: 'A new health survey is available. Takes less than 2 minutes.',
-    time: '10 minutes ago',
-    unread: true,
-  },
-  {
-    id: 2,
-    type: 'alert',
-    title: 'Community Health Update',
-    message: 'Increased respiratory symptoms reported in your area. Take precautions.',
-    time: '2 hours ago',
-    unread: true,
-  },
-  {
-    id: 3,
-    type: 'info',
-    title: 'Thank You',
-    message: 'Your last survey response was received. Thank you for helping your community.',
-    time: '1 day ago',
-    unread: false,
-  },
-];
-
 export function Notifications({ onBack }: NotificationsProps) {
+  const [notifications, setNotifications] = useState<UserNotification[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadNotifications();
+  }, []);
+
+  const loadNotifications = async () => {
+    try {
+      // Get the current logged-in user
+      const currentUser = await authService.getCurrentUser();
+      
+      if (!currentUser) {
+        console.log('No user logged in, showing empty notifications');
+        setNotifications([]);
+        return;
+      }
+
+      console.log('Loading notifications for user:', currentUser.user_id);
+      const userNotifications = await apiService.getUserNotifications(currentUser.user_id);
+      console.log('Received notifications:', userNotifications);
+      setNotifications(userNotifications);
+    } catch (error) {
+      console.error('Failed to load notifications:', error);
+      setNotifications([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleNotificationPress = async (notification: UserNotification) => {
+    if (!notification.is_read) {
+      const result = await apiService.markNotificationAsRead(notification.user_notification_id);
+      
+      if (result && result.success) {
+        // Update local state
+        setNotifications(prev => 
+          prev.map(n => 
+            n.user_notification_id === notification.user_notification_id 
+              ? { ...n, is_read: true, read_at: new Date().toISOString() }
+              : n
+          )
+        );
+        console.log('Notification marked as read successfully');
+      } else {
+        console.warn('Failed to mark notification as read');
+      }
+    }
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 60) {
+      return `${diffMins} minutes ago`;
+    } else if (diffHours < 24) {
+      return `${diffHours} hours ago`;
+    } else {
+      return `${diffDays} days ago`;
+    }
+  };
+
   const getIcon = (type: string) => {
     switch (type) {
       case 'survey':
@@ -45,6 +88,27 @@ export function Notifications({ onBack }: NotificationsProps) {
         return <Feather name="bell" size={24} color="#ffffff" />;
     }
   };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={onBack}
+            style={styles.backButton}
+            activeOpacity={0.7}
+          >
+            <Feather name="arrow-left" size={24} color="#18392b" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Notifications</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <Feather name="loader" size={32} color="#18392b" />
+          <Text style={styles.loadingText}>Loading notifications...</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -71,12 +135,14 @@ export function Notifications({ onBack }: NotificationsProps) {
         ) : (
           <View style={styles.notificationsList}>
             {notifications.map((notification) => (
-              <View
-                key={notification.id}
+              <TouchableOpacity
+                key={notification.user_notification_id}
                 style={[
                   styles.notificationCard,
-                  notification.unread && styles.notificationCardUnread
+                  !notification.is_read && styles.notificationCardUnread
                 ]}
+                onPress={() => handleNotificationPress(notification)}
+                activeOpacity={0.7}
               >
                 <View style={styles.notificationContent}>
                   <View style={styles.notificationIcon}>
@@ -87,7 +153,7 @@ export function Notifications({ onBack }: NotificationsProps) {
                       <Text style={styles.notificationTitle}>
                         {notification.title}
                       </Text>
-                      {notification.unread && (
+                      {!notification.is_read && (
                         <View style={styles.unreadDot} />
                       )}
                     </View>
@@ -95,11 +161,11 @@ export function Notifications({ onBack }: NotificationsProps) {
                       {notification.message}
                     </Text>
                     <Text style={styles.notificationTime}>
-                      {notification.time}
+                      {formatTimeAgo(notification.created_at)}
                     </Text>
                   </View>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
         )}
@@ -213,5 +279,15 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 20,
     color: '#4b5563',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
   },
 });

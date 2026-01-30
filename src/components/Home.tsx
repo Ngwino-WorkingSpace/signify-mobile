@@ -1,12 +1,42 @@
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { apiService } from '../services/api';
+import { authService } from '../services/auth';
 
 interface HomeProps {
   onStartSurvey: () => void;
   onViewNotifications: () => void;
+  onLogout?: () => void;
 }
 
-export function Home({ onStartSurvey, onViewNotifications }: HomeProps) {
+export function Home({ onStartSurvey, onViewNotifications, onLogout }: HomeProps) {
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    loadUnreadCount();
+  }, []);
+
+  const loadUnreadCount = async () => {
+    try {
+      const currentUser = await authService.getCurrentUser();
+      
+      if (!currentUser) {
+        console.log('No user logged in, unread count set to 0');
+        setUnreadCount(0);
+        return;
+      }
+
+      console.log('Loading unread count for user:', currentUser.user_id);
+      const count = await apiService.getUnreadCount(currentUser.user_id);
+      console.log('Unread count:', count);
+      setUnreadCount(count);
+    } catch (error) {
+      console.error('Failed to load unread count:', error);
+      setUnreadCount(0);
+    }
+  };
+
   return (
     <View style={styles.container}>
    
@@ -17,14 +47,31 @@ export function Home({ onStartSurvey, onViewNotifications }: HomeProps) {
           </View>
           <Text style={styles.headerTitle}>Signify</Text>
         </View>
-        <TouchableOpacity
-          onPress={onViewNotifications}
-          style={styles.notificationButton}
-          activeOpacity={0.7}
-        >
-          <Feather name="bell" size={24} color="#18392b" />
-          <View style={styles.notificationBadge} />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            onPress={onViewNotifications}
+            style={styles.notificationButton}
+            activeOpacity={0.7}
+          >
+            <Feather name="bell" size={24} color="#18392b" />
+            {unreadCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {unreadCount > 99 ? '99+' : unreadCount.toString()}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          {onLogout && (
+            <TouchableOpacity
+              onPress={onLogout}
+              style={[styles.notificationButton, { marginLeft: 8 }]}
+              activeOpacity={0.7}
+            >
+              <Feather name="log-out" size={24} color="#18392b" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <View style={styles.greeting}>
@@ -100,6 +147,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   logoCircle: {
     width: 48,
     height: 48,
@@ -127,10 +178,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4,
     right: 4,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
     backgroundColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '600',
   },
   greeting: {
     marginBottom: 32,
