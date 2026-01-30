@@ -36,18 +36,49 @@ jobs:
     - name: Setup Expo CLI
       run: npm install -g @expo/cli eas-cli
     
-    - name: Login to Expo
-      run: eas login --non-interactive
+    - name: Create Expo account token
+      run: echo "${{ secrets.EXPO_TOKEN }}" > ~/.expo-token
+    
+    - name: Build APK with EAS
+      run: eas build --platform android --profile preview --non-interactive --output ./app.apk
       env:
         EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     
-    - name: Build APK
-      run: eas build --platform android --profile preview --non-interactive
-      env:
-        EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-    
-    - name: Upload APK
+    - name: Upload APK artifact
       uses: actions/upload-artifact@v4
       with:
-        name: app-release
-        path: "*.apk"
+        name: signify-mobile-apk
+        path: ./app.apk
+        retention-days: 30
+    
+    - name: Create Release
+      if: github.event_name == 'push'
+      uses: softprops/action-gh-release@v2
+      with:
+        files: ./app.apk
+        name: Signify Mobile App v1.0.0
+        body: |
+          ## Signify Mobile App - Test Version
+          
+          ### 📱 Installation Instructions:
+          1. Download the APK file below
+          2. Enable "Install from unknown sources" on your Android device
+          3. Install the APK
+          4. Launch the app and test!
+          
+          ### 🔗 Backend Connection:
+          - Connected to: https://signify-backend-ogbk.onrender.com
+          - Health check: https://signify-backend-ogbk.onrender.com/health
+          
+          ### ✅ Features to Test:
+          - Admin login
+          - Survey viewing and submission
+          - Notifications system
+          - Response tracking
+          
+          ### 🐛 Report Issues:
+          Please report any issues to the development team.
+        draft: false
+        prerelease: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
