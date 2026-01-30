@@ -1,6 +1,6 @@
 import { Alert } from 'react-native';
 
-const API_BASE_URL = 'http://localhost:3005';
+const API_BASE_URL = 'https://signify-backend-ogbk.onrender.com';
 
 export interface Survey {
   survey_id: string;
